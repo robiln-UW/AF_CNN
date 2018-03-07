@@ -9,16 +9,19 @@ from scipy.io import loadmat
 
 
 labelMapper = {'N':0,'A':1,'O':2,'~':3}
-max_data_length = 18286
 
-def read_data(path):
-    
+
+def read_data(path,config):
+
+    data_size = config.data_size 
     # create dictionary of labels
     with open(path + '/REFERENCE.csv',mode='r') as infile:
         reader = csv.reader(infile)
         labelDict = {rows[0]:labelMapper[rows[1]] for rows in reader}
 
 
+
+    # load data from file
     labelList = []
     dataList = []
     for filename in glob.glob(os.path.join(path, '*.mat')):
@@ -32,13 +35,23 @@ def read_data(path):
 
         # read ECG data from file
         ECGData = loadmat(filename)['val'][0,:]
-        ECGData = np.pad(ECGData,(0,max_data_length-len(ECGData)),'wrap')
-        dataList.append(ECGData)
-        labelList.append(label)
+
+        # split data into data_size chunks
+        for i in range(len(ECGData)//(data_size+1)):
+            subData = ECGData[(data_size+1)*i:(data_size+1)*(i+1)-1]
+            dataList.append(subData)
+            labelList.append(label)
+                    
+        #ECGData = np.pad(ECGData,(0,max_data_size-len(ECGData)),'wrap')
+        
+#        dataList.append(ECGData)
+#        labelList.append(label)
 
     
     data = np.asarray(dataList)
     labels = np.array(labelList)
+    print(data.shape)
+    print(labels.shape)
     return data, labels
 
 

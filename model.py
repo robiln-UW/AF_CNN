@@ -23,29 +23,29 @@ class Config(object):
         data_size: Integer for the number of ECG data samples
         hidden1_size: Integer for the 1st hidden layer size.
         hidden2_size: Integer for the 2nd hidden layer size.
-        num_class: Integer for the number of label classes.
+        num_classes: Integer for the number of label classes.
         max_iters: Integer for the number of training iterations.
         model_dir: String for the output model dir.
     """
 
     def __init__(self):
-        self.batch_size = 100
+        self.batch_size = 10
         self.learning_rate = 1e-3
-        self.data_size = 18286
+        self.data_size = 1500
         self.hidden1_size = 128
         self.hidden2_size = 128
-        self.conv1_filters = 32
-        self.conv1_kernel = 128
+        self.conv1_filters = 3
+        self.conv1_kernel = 24
         self.pool1_size = 2
-        self.conv2_filters = 64
-        self.conv2_kernel = 64
+        self.conv2_filters =  3
+        self.conv2_kernel = 12
         self.pool2_size = 2
         self.dropout = 0.4
         
-        self.num_class = 4
+        self.num_classes = 4
         self.k = 5
         
-        self.max_iters = 20
+        self.max_iters = 20000
         self.model_dir = './_model'
         self.logs_path = "logs/tf_log"
         
@@ -61,8 +61,9 @@ def placeholder_inputs_feedforward(batch_size, feat_dim):
         data_placeholder: data placeholder.
         label_placeholder: Label placeholder.
     """
-    # TODO: Creates two placeholders.
+    # Creates two placeholders.
     # API link (https://www.tensorflow.org/api_docs/python/tf/placeholder).
+
     data_placeholder = tf.placeholder(name='input_feature', shape=[None, feat_dim], dtype=tf.float32)
     label_placeholder = tf.placeholder(name='output_value', shape=[None], dtype=tf.int32)
     return data_placeholder, label_placeholder
@@ -96,14 +97,16 @@ def feed_forward_net(data, config):
         logits: Output tensor with logits.
     """
 
-    """
+    
     input_layer = tf.reshape(data, [-1,config.data_size,1])
     print('Input:',input_layer.shape)
     output_size = config.data_size
     conv1 = tf.layers.conv1d(inputs=input_layer,filters=config.conv1_filters, kernel_size=config.conv1_kernel, padding='same',activation=tf.nn.relu)
 
+
     pool1 = tf.layers.max_pooling1d(inputs=conv1, pool_size=config.pool1_size, strides=config.pool1_size)
     output_size //= config.pool1_size
+
     conv2 = tf.layers.conv1d(inputs=pool1,filters=config.conv2_filters, kernel_size=config.conv2_kernel,padding='same',activation=tf.nn.relu)
 
     pool2 = tf.layers.max_pooling1d(inputs=conv2, pool_size=config.pool2_size, strides=config.pool2_size)
@@ -115,12 +118,11 @@ def feed_forward_net(data, config):
 
     dropout = tf.layers.dropout(inputs=dense, rate=config.dropout)
 
-    logits = tf.layers.dense(inputs=dropout, units=config.num_class)
+    logits = tf.layers.dense(inputs=dropout, units=config.num_classes)
                             
     return logits
-    """ 
 
-
+"""
     # Creates the 1st feed fully-connected layer with ReLU activation.
     with tf.variable_scope('hidden_layer_1'):
         # Creates two variables:
@@ -158,7 +160,7 @@ def feed_forward_net(data, config):
         logits = tf.matmul(hidden2, logits_weights) + logits_biases
 
     return logits
-
+"""
 
 def compute_loss(logits, labels):
     """Computes the cross entropy loss between logits and labels.
@@ -193,7 +195,11 @@ def evaluation(sess, data_ph, label_ph, data_set, eval_op):
     # Fills in how you compute the accuracy.
     batch_size = 100
     num_correct = 0
-    length = math.floor(data_set.num_samples/batch_size)
-    accuracy = sess.run(eval_op, feed_dict={data_ph:data_set.data,label_ph:data_set.labels})/data_set.num_samples
+
+    for i in range(data_set.num_samples//batch_size):
+        data, labels = data_set.next_batch(batch_size=batch_size, shuffle=False)
+        num_correct += sess.run(eval_op, feed_dict={data_ph:data,label_ph:labels})
+
+    accuracy = num_correct/data_set.num_samples
     
     return accuracy
