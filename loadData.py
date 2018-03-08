@@ -22,10 +22,23 @@ def read_data(path,config):
 
 
     # load data from file
-    labelList = []
-    dataList = []
-    for filename in glob.glob(os.path.join(path, '*.mat')):
 
+    train_labelList = []
+    train_dataList = []
+
+    valid_labelList = []
+    valid_dataList = []
+
+    test_labelList = []
+    test_dataList = []
+    
+    num_files = 8528
+    end_valid = math.floor(num_files*0.75)
+    end_train = math.floor(end_valid*0.75)
+    files_read = 0
+    
+    for filename in glob.glob(os.path.join(path, '*.mat')):
+        files_read += 1
         # get sample name from filename
         _,t = os.path.split(filename)
         sampleName = t[:-4]
@@ -36,23 +49,37 @@ def read_data(path,config):
         # read ECG data from file
         ECGData = loadmat(filename)['val'][0,:]
 
-        # split data into data_size chunks
+        # split data into data_size sized chunks
         for i in range(len(ECGData)//(data_size+1)):
             subData = ECGData[(data_size+1)*i:(data_size+1)*(i+1)-1]
-            dataList.append(subData)
-            labelList.append(label)
-                    
-        #ECGData = np.pad(ECGData,(0,max_data_size-len(ECGData)),'wrap')
-        
-#        dataList.append(ECGData)
-#        labelList.append(label)
 
+            if files_read < end_train:  # belongs in train set
+                train_dataList.append(subData)
+                train_labelList.append(label)
+                # add more AF data points
+                if (label == labelMapper['A']):
+                    for _ in range(3):
+                        train_dataList.append(subData)
+                        train_labelList.append(label)
+                # add reversed noisy data
+                if (label == labelMapper['~']):
+                    train_dataList.append(np.flip(subData,axis=0))
+                    train_labelList.append(label)
+            elif files_read < end_valid: # belongs in validation set
+                valid_dataList.append(subData)
+                valid_labelList.append(label)
+            else:  # belongs in test set
+                test_dataList.append(subData)
+                test_labelList.append(label)
     
-    data = np.asarray(dataList)
-    labels = np.array(labelList)
-    print(data.shape)
-    print(labels.shape)
-    return data, labels
+    train_data = np.asarray(train_dataList)
+    train_labels = np.array(train_labelList)
+    valid_data = np.asarray(valid_dataList)
+    valid_labels = np.asarray(valid_labelList)
+    test_data = np.asarray(test_dataList)
+    test_labels = np.asarray(test_labelList)
+    
+    return train_data, train_labels, valid_data, valid_labels, test_data, test_labels
 
 
 class DataSet(object):

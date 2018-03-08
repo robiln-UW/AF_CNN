@@ -29,7 +29,7 @@ class Config(object):
     """
 
     def __init__(self):
-        self.batch_size = 10
+        self.batch_size = 100
         self.learning_rate = 1e-3
         self.data_size = 1500
         self.hidden1_size = 128
@@ -45,7 +45,7 @@ class Config(object):
         self.num_classes = 4
         self.k = 5
         
-        self.max_iters = 20000
+        self.max_iters = 1000
         self.model_dir = './_model'
         self.logs_path = "logs/tf_log"
         
@@ -86,8 +86,8 @@ def fill_feed_dict(data_set, batch_size, data_ph, label_ph):
     return {data_ph: data_batch, label_ph: labels_batch}
 
 
-def feed_forward_net(data, config):
-    """Creates a feedforward neuralnetwork.
+def create_CNN(data, config):
+    """Creates a convolutional neural network.
 
     Args:
         data: Data placeholder.
@@ -122,8 +122,9 @@ def feed_forward_net(data, config):
                             
     return logits
 
-"""
-    # Creates the 1st feed fully-connected layer with ReLU activation.
+
+def create_MLP(data, config):
+        # Creates the 1st feed fully-connected layer with ReLU activation.
     with tf.variable_scope('hidden_layer_1'):
         # Creates two variables:
         # 1) hidden1_weights with size [data_size, hidden1_size].
@@ -160,7 +161,8 @@ def feed_forward_net(data, config):
         logits = tf.matmul(hidden2, logits_weights) + logits_biases
 
     return logits
-"""
+
+
 
 def compute_loss(logits, labels):
     """Computes the cross entropy loss between logits and labels.
