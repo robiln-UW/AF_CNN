@@ -7,7 +7,7 @@ from model import *
 from loadData import *
 from sklearn.model_selection import KFold
 
-EVAL_CONST = 100
+EVAL_CONST = 1000
 LAMBDA = 0.1
 
 def eval_prediction(logits, labels):
@@ -78,14 +78,12 @@ def train(config, train_data_set, valid_data_set):
             print('Normal:{}  AF:{}  Other:{}   Noisy:{}'.format(validDist[0],validDist[1],validDist[2],validDist[3]))
 
 
-                
-
             for step in range(config.max_iters):
                 # get next batch and load into feed dictionary
                 train_feed_dict = fill_feed_dict(train_data_set, config.batch_size, data_placeholder, labels_placeholder)
                 _, loss_val,summary = sess.run([train_op, loss,summary_op], feed_dict=train_feed_dict)
                 writer.add_summary(summary,step)
-            
+
                 # display current training results
                 if (step + 1) % EVAL_CONST == 0:
                     print('=======Step {0}======'.format(step))
@@ -103,7 +101,11 @@ def train(config, train_data_set, valid_data_set):
                         checkpoint_file = os.path.join(config.model_dir, 'model.ckpt')
                         saver.save(sess, checkpoint_file, global_step = step)
 
+                        cm = compute_confusion(sess, logits, data_placeholder, labels_placeholder, valid_data_set, config)
+                        print('Confusion Matrix:')
+                        print(cm)
 
+                        """               
                         # calculate confusion matrix
                         predictions = tf.argmax(logits,1)
                         confusion_matrix_tf = tf.confusion_matrix(labels_placeholder,tf.argmax(logits,1))
@@ -112,22 +114,45 @@ def train(config, train_data_set, valid_data_set):
                         cm = cm/ totals[:,None]
                         print('CM:')
                         print(cm)
-        
+                        """               
 
-                # calculate confusion matrix
-                predictions = tf.argmax(logits,1)
-                confusion_matrix_tf = tf.confusion_matrix(labels_placeholder,tf.argmax(logits,1))
-                cm = confusion_matrix_tf.eval(feed_dict = {data_placeholder:valid_data_set._data,labels_placeholder:valid_data_set._labels})
-                totals = np.sum(cm,axis=1)
-                cm = cm/ totals[:,None]
-                print('CM:')
-                print(cm)
+            print('+++++ FINAL EVALUATION +++++')
+            print('Train data evaluation:')
+            acc = evaluation(sess, data_placeholder, labels_placeholder, train_data_set, current_cnt_op)
+            print('Train Accuracy: {:.3f}'.format(acc))
+	    
+            if valid_data_set:
+                print('Validation data evaluation:')
+                acc = evaluation(sess, data_placeholder, labels_placeholder, valid_data_set, current_cnt_op)
+                print('Validation Accuracy: {:.3f}'.format(acc))
+                print('======')
 
+            # calculate confusion matrix
+            predictions = tf.argmax(logits,1)
+            confusion_matrix_tf = tf.confusion_matrix(labels_placeholder,tf.argmax(logits,1))
+            cm = confusion_matrix_tf.eval(feed_dict = {data_placeholder:valid_data_set._data,labels_placeholder:valid_data_set._labels})
+            totals = np.sum(cm,axis=1)
+            cm = cm/ totals[:,None]
+            print('CM:')
+            print(cm)
                 
             return sess
 
 
-    
+def compute_confusion(sess, logits, data_ph, label_ph, data_set, config):
+    batch_size = config.batch_size
+    predictions = tf.argmax(logits,1)
+    confusion_matrix_tf = tf.confusion_matrix(label_ph, predictions, num_classes=4)
+    cm = np.zeros((config.num_classes,config.num_classes))
+    for _ in range(data_set.num_samples//batch_size):
+        data, labels = data_set.next_batch(batch_size=batch_size,shuffle=False)
+        cm = cm + sess.run(confusion_matrix_tf, feed_dict = {data_ph:data,label_ph:labels})
+        
+        
+    totals = np.sum(cm,axis=1)
+    cm = cm/totals[:,None]
+    return cm
+        
 def load_data(config):
     train_data, train_labels, valid_data, valid_labels, test_data, test_labels = read_data('./data/training2017',config)
 
@@ -145,8 +170,6 @@ def load_data(config):
     test_dataset = DataSet(test_data, test_labels)
     
     return train_dataset, valid_dataset, test_dataset
-
-
 
 
 def main():

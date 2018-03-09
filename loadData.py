@@ -9,7 +9,7 @@ from scipy.io import loadmat
 
 
 labelMapper = {'N':0,'A':1,'O':2,'~':3}
-
+reverse_labelMapper = {0:'N',1:'A',2:'O',3:'~'}
 
 def read_data(path,config):
 
@@ -52,7 +52,16 @@ def read_data(path,config):
         # split data into data_size sized chunks
         for i in range(len(ECGData)//(data_size+1)):
             subData = ECGData[(data_size+1)*i:(data_size+1)*(i+1)-1]
+            dMax = np.amax(np.absolute(subData))
+            subData = subData/dMax
+            
 
+            r = random.randint(0,300)
+            r = 51
+            if r < 50:
+                plt.plot(subData)
+                plt.title('Label: {}'.format(reverse_labelMapper[label]))
+                plt.show()
             if files_read < end_train:  # belongs in train set
                 train_dataList.append(subData)
                 train_labelList.append(label)

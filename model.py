@@ -13,6 +13,8 @@ import sys
 import tensorflow as tf
 import numpy as np
 import math
+import datetime
+
 
 class Config(object):
     """This is a wrapper for all configurable parameters for model.
@@ -34,20 +36,20 @@ class Config(object):
         self.data_size = 1500
         self.hidden1_size = 128
         self.hidden2_size = 128
-        self.conv1_filters = 3
+        self.conv1_filters = 16
         self.conv1_kernel = 24
         self.pool1_size = 2
-        self.conv2_filters =  3
+        self.conv2_filters = 8
         self.conv2_kernel = 12
         self.pool2_size = 2
-        self.dropout = 0.4
+        self.dropout = 0.5
         
         self.num_classes = 4
         self.k = 5
         
-        self.max_iters = 1000
+        self.max_iters = 4000
         self.model_dir = './_model'
-        self.logs_path = "logs/tf_log"
+        self.logs_path = "logs/tf_log_{}".format(datetime.datetime.now())
         
 
 def placeholder_inputs_feedforward(batch_size, feat_dim):
@@ -101,24 +103,33 @@ def create_CNN(data, config):
     input_layer = tf.reshape(data, [-1,config.data_size,1])
     print('Input:',input_layer.shape)
     output_size = config.data_size
-    conv1 = tf.layers.conv1d(inputs=input_layer,filters=config.conv1_filters, kernel_size=config.conv1_kernel, padding='same',activation=tf.nn.relu)
 
+    with tf.variable_scope('conv1'):
+        conv1 = tf.layers.conv1d(inputs=input_layer,filters=config.conv1_filters, kernel_size=config.conv1_kernel, padding='same',activation=tf.nn.relu)
 
-    pool1 = tf.layers.max_pooling1d(inputs=conv1, pool_size=config.pool1_size, strides=config.pool1_size)
+    with tf.variable_scope('pool1'):
+        pool1 = tf.layers.max_pooling1d(inputs=conv1, pool_size=config.pool1_size, strides=config.pool1_size)
+
     output_size //= config.pool1_size
 
-    conv2 = tf.layers.conv1d(inputs=pool1,filters=config.conv2_filters, kernel_size=config.conv2_kernel,padding='same',activation=tf.nn.relu)
+    with tf.variable_scope('conv2'):
+        conv2 = tf.layers.conv1d(inputs=pool1,filters=config.conv2_filters, kernel_size=config.conv2_kernel,padding='same',activation=tf.nn.relu)
 
-    pool2 = tf.layers.max_pooling1d(inputs=conv2, pool_size=config.pool2_size, strides=config.pool2_size)
+    with tf.variable_scope('pool2'):
+        pool2 = tf.layers.max_pooling1d(inputs=conv2, pool_size=config.pool2_size, strides=config.pool2_size)
     output_size //= config.pool2_size
     
-    pool2_flat = tf.reshape(pool2, [-1, int(output_size)*config.conv2_filters])
+    with tf.variable_scope('flatten'):
+        pool2_flat = tf.reshape(pool2, [-1, int(output_size)*config.conv2_filters])
 
-    dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
+    with tf.variable_scope('dense'):
+        dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
 
-    dropout = tf.layers.dropout(inputs=dense, rate=config.dropout)
+    with tf.variable_scope('dropout'):
+        dropout = tf.layers.dropout(inputs=dense, rate=config.dropout)
 
-    logits = tf.layers.dense(inputs=dropout, units=config.num_classes)
+    with tf.variable_scope('logits'):
+        logits = tf.layers.dense(inputs=dropout, units=config.num_classes)
                             
     return logits
 
@@ -151,11 +162,11 @@ def create_MLP(data, config):
     # Creates the pen-ultimate linear layer.
     with tf.variable_scope('logits_layer'):
         # Creates two variables:
-        # 1) logits_weights with size [config.hidden2_size, config.num_class].
-        # 2) logits_biases with size [config.num_class].
+        # 1) logits_weights with size [config.hidden2_size, config.num_classes].
+        # 2) logits_biases with size [config.num_classes].
 
-        logits_weights = tf.get_variable(name='feature_weight',shape=[config.hidden2_size,config.num_class], initializer=tf.random_uniform_initializer(-0.1,0,1))
-        logits_biases = tf.get_variable(name='feature_bias', shape=[config.num_class], initializer=tf.zeros_initializer())
+        logits_weights = tf.get_variable(name='feature_weight',shape=[config.hidden2_size,config.num_classes], initializer=tf.random_uniform_initializer(-0.1,0,1))
+        logits_biases = tf.get_variable(name='feature_bias', shape=[config.num_classes], initializer=tf.zeros_initializer())
 
         # Performs linear projection on hidden2 using the two variables above.
         logits = tf.matmul(hidden2, logits_weights) + logits_biases
@@ -168,16 +179,27 @@ def compute_loss(logits, labels):
     """Computes the cross entropy loss between logits and labels.
 
     Args:
-        logits: A [batch_size, num_class] sized float tensor.
+        logits: A [batch_size, num_classes] sized float tensor.
         labels: A [batch_size] sized integer tensor.
 
     Returns:
         loss: Loss tensor.
     """
+
+
     # Computes the cross-entropy loss.
     # API (https://www.tensorflow.org/api_docs/python/tf/nn/sparse_softmax_cross_entropy_with_logits).
-    labels_one_hot = tf.one_hot(labels,logits.shape[1])  # logits.shape[1] is the number of classes
-    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels_one_hot, logits=logits))
+
+    #class_weight = tf.constant([2.0, 0.5, 2.0,1.0])
+    class_weight = tf.constant([2.0, 0.1, 2.0, 0.4])
+    weighted_logits = tf.multiply(logits,class_weight)
+    
+    with tf.variable_scope('cross_ent_loss'):
+        #loss = tf.reduce_mean(tf.losses.sparse_softmax_cross_entropy(labels=labels,logits=logits,weights=class_weight))
+        labels_one_hot = tf.one_hot(labels,logits.shape[1])  # logits.shape[1] is the number of classes
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels_one_hot, logits=weighted_logits))
+
+
     return loss
 
 
