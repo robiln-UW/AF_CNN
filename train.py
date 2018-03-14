@@ -31,7 +31,7 @@ def create_train_op(loss, learning_rate):
     return train_op
 
 
-def train(config, train_data_set, valid_data_set):
+def train(config, train_data_set, valid_data_set, test_data_set):
 
     with tf.Graph().as_default():
 
@@ -39,7 +39,7 @@ def train(config, train_data_set, valid_data_set):
         # create network
         logits = create_CNN(data_placeholder, config)
 
-        loss = tf.reduce_mean(compute_loss(logits, labels_placeholder))
+        loss = tf.reduce_mean(compute_loss(logits, labels_placeholder,config))
         tf.summary.scalar('loss', loss)
 
         # define optimizer
@@ -105,17 +105,6 @@ def train(config, train_data_set, valid_data_set):
                         print('Confusion Matrix:')
                         print(cm)
 
-                        """               
-                        # calculate confusion matrix
-                        predictions = tf.argmax(logits,1)
-                        confusion_matrix_tf = tf.confusion_matrix(labels_placeholder,tf.argmax(logits,1))
-                        cm = confusion_matrix_tf.eval(feed_dict = {data_placeholder:valid_data_set._data,labels_placeholder:valid_data_set._labels})
-                        totals = np.sum(cm,axis=1)
-                        cm = cm/ totals[:,None]
-                        print('CM:')
-                        print(cm)
-                        """               
-
             print('+++++ FINAL EVALUATION +++++')
             print('Train data evaluation:')
             acc = evaluation(sess, data_placeholder, labels_placeholder, train_data_set, current_cnt_op)
@@ -128,13 +117,15 @@ def train(config, train_data_set, valid_data_set):
                 print('======')
 
             # calculate confusion matrix
-            predictions = tf.argmax(logits,1)
-            confusion_matrix_tf = tf.confusion_matrix(labels_placeholder,tf.argmax(logits,1))
-            cm = confusion_matrix_tf.eval(feed_dict = {data_placeholder:valid_data_set._data,labels_placeholder:valid_data_set._labels})
-            totals = np.sum(cm,axis=1)
-            cm = cm/ totals[:,None]
-            print('CM:')
+            cm = compute_confusion(sess, logits, data_placeholder, labels_placeholder, valid_data_set, config)
+            print('Confusion Matrix:')
             print(cm)
+
+
+            print('Test Accuracy:')
+            print(evaluation(sess, data_placeholder, labels_placeholder, test_data_set, current_cnt_op))
+            print('Confusion Matrix:')
+            print(compute_confusion(sess, logits, data_placeholder, labels_placeholder, test_data_set,config))
                 
             return sess
 
@@ -149,8 +140,19 @@ def compute_confusion(sess, logits, data_ph, label_ph, data_set, config):
         cm = cm + sess.run(confusion_matrix_tf, feed_dict = {data_ph:data,label_ph:labels})
         
         
-    totals = np.sum(cm,axis=1)
-    cm = cm/totals[:,None]
+    total_actual = np.sum(cm,axis=1)
+    total_predicted = np.sum(cm,axis=0)
+    f1_normal = (2*cm[0,0])/(total_actual[0]+total_predicted[0])
+    f1_afib = (2*cm[1,1])/(total_actual[1]+total_predicted[1])
+    f1_other = (2*cm[2,2])/(total_actual[2]+total_predicted[2])
+    f1_noisy = (2*cm[3,3])/(total_actual[3]+total_predicted[3])
+    
+    print("F1 Normal:",f1_normal)
+    print("F1 A-Fib:",f1_afib)
+    print("F1 Other:",f1_other)
+    print("F1 Noisy:",f1_noisy)
+    
+    cm = cm/total_actual[:,None]
     return cm
         
 def load_data(config):
@@ -183,7 +185,7 @@ def main():
     if not os.path.exists(config.model_dir):
         os.mkdir(config.model_dir)
     print('Begin Training...')
-    sess = train(config, train_data_set, valid_data_set)
+    sess = train(config, train_data_set, valid_data_set, test_data_set)
     
     
 

@@ -32,22 +32,31 @@ class Config(object):
 
     def __init__(self):
         self.batch_size = 100
-        self.learning_rate = 1e-3
+        self.learning_rate = 0.001
         self.data_size = 1500
-        self.hidden1_size = 128
-        self.hidden2_size = 128
+        self.hidden1_size = 16
+        self.hidden2_size = 16
+
+
+        self.class_weight = [3.0, 0.25, 3.0, 0.5]
+        # CNN Parameters
         self.conv1_filters = 16
-        self.conv1_kernel = 24
+        self.conv1_kernel = 64
         self.pool1_size = 2
         self.conv2_filters = 8
-        self.conv2_kernel = 12
+        self.conv2_kernel = 32
         self.pool2_size = 2
+        self.deep_filters = 8
+        self.deep_kernel = 12
+        self.deep_pool_size = 2
+        
+        self.frequency_response = False
         self.dropout = 0.5
         
         self.num_classes = 4
         self.k = 5
         
-        self.max_iters = 4000
+        self.max_iters = 3000
         self.model_dir = './_model'
         self.logs_path = "logs/tf_log_{}".format(datetime.datetime.now())
         
@@ -175,7 +184,89 @@ def create_MLP(data, config):
 
 
 
-def compute_loss(logits, labels):
+
+def create_Deep_CNN(data, config):
+    """Creates a convolutional neural network.
+
+    Args:
+        data: Data placeholder.
+        config: The Config object contains model parameters.
+
+    Returns:
+        logits: Output tensor with logits.
+    """
+
+    
+    input_layer = tf.reshape(data, [-1,config.data_size,1])
+    print('Input:',input_layer.shape)
+    output_size = config.data_size
+
+    with tf.variable_scope('conv1'):
+        conv1 = tf.layers.conv1d(inputs=input_layer,filters=config.conv1_filters, kernel_size=config.conv1_kernel, padding='same',activation=tf.nn.relu)
+
+    with tf.variable_scope('pool1'):
+        pool1 = tf.layers.max_pooling1d(inputs=conv1, pool_size=config.pool1_size, strides=config.pool1_size)
+
+    output_size //= config.pool1_size
+
+    with tf.variable_scope('conv2'):
+        conv2 = tf.layers.conv1d(inputs=pool1,filters=config.conv2_filters, kernel_size=config.conv2_kernel,padding='same',activation=tf.nn.relu)
+
+    with tf.variable_scope('pool2'):
+        pool2 = tf.layers.max_pooling1d(inputs=conv2, pool_size=config.pool2_size, strides=config.pool2_size)
+    output_size //= config.pool2_size
+
+    with tf.variable_scope('conv3'):
+        conv3 = tf.layers.conv1d(inputs=pool2,filters=config.deep_filters, kernel_size=config.deep_kernel,padding='same',activation=tf.nn.relu)
+
+    with tf.variable_scope('pool3'):
+        pool3 = tf.layers.max_pooling1d(inputs=conv3, pool_size=config.deep_pool_size, strides=config.deep_pool_size)
+    output_size //= config.deep_pool_size
+
+    with tf.variable_scope('conv4'):
+        conv4 = tf.layers.conv1d(inputs=pool3,filters=config.deep_filters, kernel_size=config.deep_kernel,padding='same',activation=tf.nn.relu)
+    with tf.variable_scope('pool4'):
+        pool4 = tf.layers.max_pooling1d(inputs=conv4, pool_size=config.deep_pool_size, strides=config.deep_pool_size)
+    output_size //= config.deep_pool_size
+
+    with tf.variable_scope('conv5'):
+        conv5 = tf.layers.conv1d(inputs=pool4,filters=config.deep_filters, kernel_size=config.deep_kernel,padding='same',activation=tf.nn.relu)
+    with tf.variable_scope('pool5'):
+        pool5 = tf.layers.max_pooling1d(inputs=conv5, pool_size=config.deep_pool_size, strides=config.deep_pool_size)
+    output_size //= config.deep_pool_size
+
+    with tf.variable_scope('conv6'):
+        conv6 = tf.layers.conv1d(inputs=pool5,filters=config.deep_filters, kernel_size=config.deep_kernel,padding='same',activation=tf.nn.relu)
+    with tf.variable_scope('pool6'):
+        pool6 = tf.layers.max_pooling1d(inputs=conv6, pool_size=config.deep_pool_size, strides=config.deep_pool_size)
+    output_size //= config.deep_pool_size
+
+    with tf.variable_scope('conv7'):
+        conv7 = tf.layers.conv1d(inputs=pool6,filters=config.deep_filters, kernel_size=config.deep_kernel,padding='same',activation=tf.nn.relu)
+    with tf.variable_scope('pool7'):
+        pool7 = tf.layers.max_pooling1d(inputs=conv7, pool_size=config.deep_pool_size, strides=config.deep_pool_size)
+    output_size //= config.deep_pool_size
+
+
+    
+    with tf.variable_scope('flatten'):
+        pool7_flat = tf.reshape(pool7, [-1, int(output_size)*config.deep_filters])
+
+    with tf.variable_scope('dense'):
+        dense = tf.layers.dense(inputs=pool7_flat, units=1024, activation=tf.nn.relu)
+
+    with tf.variable_scope('dropout'):
+        dropout = tf.layers.dropout(inputs=dense, rate=config.dropout)
+
+    with tf.variable_scope('logits'):
+        logits = tf.layers.dense(inputs=dropout, units=config.num_classes)
+                            
+    return logits
+
+
+
+
+def compute_loss(logits, labels, config):
     """Computes the cross entropy loss between logits and labels.
 
     Args:
@@ -190,8 +281,7 @@ def compute_loss(logits, labels):
     # Computes the cross-entropy loss.
     # API (https://www.tensorflow.org/api_docs/python/tf/nn/sparse_softmax_cross_entropy_with_logits).
 
-    #class_weight = tf.constant([2.0, 0.5, 2.0,1.0])
-    class_weight = tf.constant([2.0, 0.1, 2.0, 0.4])
+    class_weight = tf.constant(config.class_weight)
     weighted_logits = tf.multiply(logits,class_weight)
     
     with tf.variable_scope('cross_ent_loss'):

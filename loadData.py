@@ -18,7 +18,7 @@ def read_data(path,config):
     with open(path + '/REFERENCE.csv',mode='r') as infile:
         reader = csv.reader(infile)
         labelDict = {rows[0]:labelMapper[rows[1]] for rows in reader}
-
+        
 
 
     # load data from file
@@ -52,15 +52,22 @@ def read_data(path,config):
         # split data into data_size sized chunks
         for i in range(len(ECGData)//(data_size+1)):
             subData = ECGData[(data_size+1)*i:(data_size+1)*(i+1)-1]
+            # normalize
             dMax = np.amax(np.absolute(subData))
             subData = subData/dMax
             
+            # Convert to magnitude frequency response
+            if (config.frequency_response == True):
+                subData = np.absolute(np.fft.fft(subData))
 
             r = random.randint(0,300)
             r = 51
             if r < 50:
+                timePoints = np.linspace(0,data_size/300,data_size)
                 plt.plot(subData)
                 plt.title('Label: {}'.format(reverse_labelMapper[label]))
+                plt.xlabel('Time (s)')
+                plt.ylabel('Normalized Amplitude')
                 plt.show()
             if files_read < end_train:  # belongs in train set
                 train_dataList.append(subData)
